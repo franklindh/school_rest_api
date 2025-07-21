@@ -7,6 +7,8 @@
 *.dll
 *.so
 *.dylib
+*.pem
+openssl.cnf
 
 # Test binary, built with `go test -c`
 *.test
@@ -30,9 +32,3 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
-
-# Sertifikat SSL dan file kunci, jangan pernah di-upload!
-*.pem
-
-# File konfigurasi OpenSSL (opsional, tapi bagus untuk di-ignore)
-openssl.cnf
