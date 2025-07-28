@@ -9,6 +9,7 @@
 *.dylib
 *.pem
 openssl.cnf
+README.md
 
 # Test binary, built with `go test -c`
 *.test
