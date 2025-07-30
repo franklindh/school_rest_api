@@ -10,6 +10,7 @@
 *.pem
 openssl.cnf
 README.md
+studentsdatajson.txt
 
 # Test binary, built with `go test -c`
 *.test

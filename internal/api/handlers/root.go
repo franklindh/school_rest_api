@@ -6,5 +6,5 @@ import (
 )
 
 func RootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello Root Route")
+	fmt.Fprintf(w, "School Rest API")
 }

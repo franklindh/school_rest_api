@@ -17,7 +17,7 @@ func main() {
 
 	err := godotenv.Load()
 	if err != nil {
-		return 
+		return
 	}
 
 	_, err = sqlconnect.ConnectDb()
@@ -47,9 +47,9 @@ func main() {
 	// secureMux := mw.Hpp(hppOptions)(rl.Middelware(mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))))))
 	// secureMux := mw.Cors(rl.Middelware(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Compression(mw.Hpp(hppOptions)(mux))))))
 	// secureMux := utils.ApplyMiddlewares(mux, mw.Hpp(hppOptions), mw.Compression, mw.SecurityHeaders, mw.ResponseTimeMiddleware, rl.Middelware, mw.Cors)
-	router := router.Router()
+	router := router.MainRouter()
 	secureMux := mw.SecurityHeaders(router)
-	
+
 	// Create custome server
 	server := &http.Server{
 		Addr: port,
@@ -64,5 +64,5 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error starting the server", err)
 	}
-	
+
 }
