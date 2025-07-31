@@ -25,6 +25,7 @@ func GenerateInsertQuery(tableName string, model any) string {
 			placeholders += "?"
 		}
 	}
+	fmt.Printf("INSERT INTO %s (%s) VALUES (%s) \n", tableName, columns, placeholders)
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, columns, placeholders)
 }
 
