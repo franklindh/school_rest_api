@@ -9,6 +9,7 @@ import (
 	mw "restapi/internal/api/middlewares"
 	"restapi/internal/api/router"
 	"restapi/internal/repositories/sqlconnect"
+	"restapi/pkg/utils"
 
 	"github.com/joho/godotenv"
 )
@@ -22,7 +23,7 @@ func main() {
 
 	_, err = sqlconnect.ConnectDb()
 	if err != nil {
-		fmt.Println("Error---:", err)
+		utils.ErrorHandler(err, "")
 		return
 	}
 
@@ -48,7 +49,9 @@ func main() {
 	// secureMux := mw.Cors(rl.Middelware(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Compression(mw.Hpp(hppOptions)(mux))))))
 	// secureMux := utils.ApplyMiddlewares(mux, mw.Hpp(hppOptions), mw.Compression, mw.SecurityHeaders, mw.ResponseTimeMiddleware, rl.Middelware, mw.Cors)
 	router := router.MainRouter()
-	secureMux := mw.SecurityHeaders(router)
+	jwtMiddleware := mw.MiddelwaresExcludePaths(mw.JWTMiddleware, "/staff/login")
+	secureMux := jwtMiddleware(mw.SecurityHeaders(router))
+	// secureMux := mw.SecurityHeaders(router)
 
 	// Create custome server
 	server := &http.Server{

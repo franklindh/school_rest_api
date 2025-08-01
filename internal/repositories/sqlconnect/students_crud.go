@@ -229,25 +229,18 @@ func PatchOneStudent(id int, updates map[string]any) (models.Student, error) {
 	// 	http.Error(w, "Error updating Student", http.StatusInternalServerError)
 	// 	return
 	// }
-	// Siapkan slice untuk menampung bagian SET dari query dan argumennya
 	setClauses := make([]string, 0, len(updates))
 	args := make([]any, 0, len(updates)+1)
 
-	// Bangun query secara dinamis dari map 'updates'
 	for key, value := range updates {
-		// Asumsi: key dari JSON sama dengan nama kolom di database
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", key))
 		args = append(args, value)
 	}
 
-	// Tambahkan ID ke akhir slice argumen untuk klausa WHERE
 	args = append(args, id)
 
-	// Gabungkan semua `setClauses` menjadi satu string, dipisahkan koma
-	// Contoh: "first_name = ?, class = ?"
 	query := fmt.Sprintf("UPDATE students SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 
-	// Eksekusi query yang sudah dibangun secara dinamis
 	_, err = db.Exec(query, args...)
 	if err != nil {
 		return models.Student{}, utils.ErrorHandler(err, "error updating data")

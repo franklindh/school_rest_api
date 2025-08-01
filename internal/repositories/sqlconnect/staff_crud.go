@@ -1,14 +1,22 @@
 package sqlconnect
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"restapi/internal/models"
 	"restapi/pkg/utils"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/go-mail/mail/v2"
 )
 
 func GetStaffDBHandler(staffmodel []models.Staff, r *http.Request) ([]models.Staff, error) {
@@ -77,7 +85,11 @@ func AddStaffDBHandler(newStaff []models.Staff) ([]models.Staff, error) {
 
 	addedStaff := make([]models.Staff, len(newStaff))
 	for i, newStaff := range newStaff {
-		// res, err := stmt.Exec(newStaff.FirstName, newStaff.LastName, newStaff.Email, newStaff.Class, newStaff.Subject)
+		newStaff.Password, err = utils.HashPassword(newStaff.Password)
+		if err != nil {
+			return nil, utils.ErrorHandler(err, "error adding staff into database")
+		}
+
 		values := utils.GetStructValues(newStaff)
 		res, err := stmt.Exec(values...)
 		if err != nil {
@@ -202,25 +214,19 @@ func PatchOneStaff(id int, updates map[string]any) (models.Staff, error) {
 	// 	http.Error(w, "Error updating Staff", http.StatusInternalServerError)
 	// 	return
 	// }
-	// Siapkan slice untuk menampung bagian SET dari query dan argumennya
 	setClauses := make([]string, 0, len(updates))
 	args := make([]any, 0, len(updates)+1)
 
-	// Bangun query secara dinamis dari map 'updates'
 	for key, value := range updates {
-		// Asumsi: key dari JSON sama dengan nama kolom di database
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", key))
 		args = append(args, value)
 	}
 
-	// Tambahkan ID ke akhir slice argumen untuk klausa WHERE
 	args = append(args, id)
 
-	// Gabungkan semua `setClauses` menjadi satu string, dipisahkan koma
 	// Contoh: "first_name = ?, class = ?"
 	query := fmt.Sprintf("UPDATE staff SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 
-	// Eksekusi query yang sudah dibangun secara dinamis
 	_, err = db.Exec(query, args...)
 	if err != nil {
 		return models.Staff{}, utils.ErrorHandler(err, "error updating data")
@@ -304,6 +310,128 @@ func DeleteOneStaff(id int) error {
 
 	if rowsAffected == 0 {
 		return utils.ErrorHandler(err, "Staff not found")
+	}
+	return nil
+}
+
+func GetUserByUsername(username string) (*models.Staff, error) {
+	db, err := ConnectDb()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "internal error")
+	}
+	defer db.Close()
+
+	user := &models.Staff{}
+	err = db.QueryRow(`SELECT id, first_name, last_name, email, username, password, inactive_status, role FROM staff WHERE username = ?`, username).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.InactiveStatus, &user.Role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, utils.ErrorHandler(err, "user not found")
+		}
+		return nil, utils.ErrorHandler(err, "database error")
+	}
+	return user, nil
+}
+
+func UpdatePasswordInDb(userId int, currentPassword, newPassword string) (bool, error) {
+	db, err := ConnectDb()
+	if err != nil {
+		return false, utils.ErrorHandler(err, "database connection error")
+	}
+	defer db.Close()
+
+	var username string
+	var userPassword string
+	var userRole string
+
+	err = db.QueryRow(`SELECT username, password, role FROM staff WHERE id = ?`, userId).Scan(&username, &userPassword, &userRole)
+	if err != nil {
+		return false, utils.ErrorHandler(err, "user not found")
+	}
+
+	err = utils.VerifyPassword(currentPassword, userPassword)
+	if err != nil {
+
+		return false, utils.ErrorHandler(err, "The password you entered does not match the current password on file")
+	}
+
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+
+		return false, utils.ErrorHandler(err, "internal error")
+	}
+
+	currentTime := time.Now().Format(time.RFC3339)
+
+	_, err = db.Exec(`UPDATE staff SET password = ?, password_changed_at = ? WHERE id = ?`, hashedPassword, currentTime, userId)
+	if err != nil {
+
+		return false, utils.ErrorHandler(err, "failed to update the password")
+	}
+
+	// token, err := utils.SignToken(userId, username, userRole)
+	// if err != nil {
+	// 	utils.ErrorHandler(err, "Password update. Could not create token")
+	// 	return
+	// }
+
+	return true, nil
+}
+
+func ForgotPasswordDbHandler(emailId string) error {
+	db, err := ConnectDb()
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal error")
+	}
+	defer db.Close()
+
+	var staff models.Staff
+	err = db.QueryRow(`SELECT id FROM staff WHERE email = ?`, emailId).Scan(&staff.ID)
+	if err != nil {
+		return utils.ErrorHandler(err, "User not found")
+	}
+
+	duration, err := strconv.Atoi(os.Getenv("RESET_TOKEN_EXP_DURATION"))
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email")
+	}
+	mins := time.Duration(duration)
+
+	expiry := time.Now().Add(mins * time.Minute).Format(time.RFC3339)
+
+	tokenBytes := make([]byte, 32)
+	_, err = rand.Read(tokenBytes)
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email")
+	}
+
+	log.Println("tokenBytes:", tokenBytes)
+	token := hex.EncodeToString(tokenBytes)
+	log.Println("token:", token)
+
+	hashedToken := sha256.Sum256(tokenBytes)
+	log.Println("hashedToken:", hashedToken)
+
+	hashedTokenString := hex.EncodeToString(hashedToken[:])
+
+	_, err = db.Exec(`UPDATE staff SET password_reset_token = ?, password_token_expires = ? WHERE id = ?`, hashedTokenString, expiry, staff.ID)
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email")
+	}
+
+	// send the reset email
+	resetURL := fmt.Sprintf("https://localhost:3000/staff/resetpassword/reset/%s", token)
+	message := fmt.Sprintf("Forgot your passsword? Reset your password using the following link: \n%s\nIf you didn't request a password reset, please ignore this email. This link is only valid for %d minutes.", resetURL, int(mins))
+
+	m := mail.NewMessage()
+	m.SetHeader("From", "schooladmin@school.com") // sesuain
+	m.SetHeader("To", emailId)
+	m.SetHeader("Subject", "Your password reset link")
+	m.SetBody("text/plain", message)
+
+	d := mail.NewDialer("localhost", 1025, "", "")
+	err = d.DialAndSend(m)
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email")
 	}
 	return nil
 }
