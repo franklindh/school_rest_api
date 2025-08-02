@@ -20,7 +20,7 @@ func StaffRouter() *http.ServeMux {
 	mux.HandleFunc("POST /staff/login", handlers.LoginHandler)
 	mux.HandleFunc("POST /staff/logout", handlers.LogoutHandler)
 	mux.HandleFunc("POST /staff/forgotpassword", handlers.ForgotPasswordHandler)
-	mux.HandleFunc("POST /staff/resetpassword/reset/{resetcode}", handlers.GetStaffHandler)
+	mux.HandleFunc("POST /staff/resetpassword/reset/{resetcode}", handlers.ResetPasswordHandler)
 
 	return mux
 }
